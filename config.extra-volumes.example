@@ -1,0 +1,5 @@
+# 额外 Docker 挂载（每行一条 host:container）
+# 复制为 config.extra-volumes 后修改（已 gitignore，勿提交本机路径）
+#
+# 与 config.local.env 中 DOCKER_EXTRA_VOLUMES 可二选一或同时使用（会合并）
+/mnt/local_ssd_550/zhuxiaohai:/fast

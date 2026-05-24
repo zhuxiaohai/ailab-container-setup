@@ -41,6 +41,11 @@ if docker ps -a --format '{{.Names}}' | grep -qx "${NAME}"; then
     docker rm -f "${NAME}"
 fi
 
+docker_collect_extra_volumes
+if ((${#DOCKER_VOLUME_ARGS[@]} > 0)); then
+    log "额外挂载 ${#DOCKER_VOLUME_ARGS[@]} 项（DOCKER_EXTRA_VOLUMES / config.extra-volumes）"
+fi
+
 log "启动容器 ${NAME} (${IMAGE}) IP=${IP}"
 docker run \
     --network="${DOCKER_NETWORK}" \
@@ -50,6 +55,7 @@ docker run \
     -v "${VOL_WORKSPACE_HOST}:${VOL_WORKSPACE}" \
     -v "${VOL_DATA_HOST}:${VOL_DATA}" \
     -v "${VOL_MODEL_HOST}:${VOL_MODEL}" \
+    "${DOCKER_VOLUME_ARGS[@]}" \
     --name="${NAME}" \
     "${IMAGE}" \
     bash

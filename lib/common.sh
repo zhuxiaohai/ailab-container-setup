@@ -62,3 +62,66 @@ container_ip() {
     local name="$1"
     docker inspect "$name" --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 2>/dev/null | head -1
 }
+
+_trim_volume_spec() {
+    local s="$1"
+    s="${s%%#*}"
+    s="${s#"${s%%[![:space:]]*}"}"
+    s="${s%"${s##*[![:space:]]}"}"
+    printf '%s' "$s"
+}
+
+# 解析单条 host:container，成功则向 DOCKER_VOLUME_ARGS 追加 -v
+_add_docker_volume_spec() {
+    local spec host container
+    spec="$(_trim_volume_spec "$1")"
+    [[ -z "$spec" ]] && return 0
+    if [[ "$spec" != *:* ]]; then
+        echo "WARN: 忽略无效挂载（需 host:container）: $spec" >&2
+        return 0
+    fi
+    host="${spec%%:*}"
+    container="${spec#*:}"
+    host="$(_trim_volume_spec "$host")"
+    container="$(_trim_volume_spec "$container")"
+    if [[ -z "$host" || -z "$container" ]]; then
+        echo "WARN: 忽略无效挂载（host 或 container 为空）: $spec" >&2
+        return 0
+    fi
+    if [[ ! -e "$host" ]]; then
+        echo "WARN: 宿主机路径不存在，仍将挂载: $host -> $container" >&2
+    fi
+    DOCKER_VOLUME_ARGS+=(-v "${host}:${container}")
+}
+
+# 从字符串解析（分号或换行分隔）
+_parse_docker_extra_volumes_var() {
+    local raw="$1" part
+    [[ -z "$raw" ]] && return 0
+    raw="${raw//$'\n'/;}"
+    local IFS=';'
+    for part in $raw; do
+        _add_docker_volume_spec "$part"
+    done
+}
+
+# 从列表文件解析（每行 host:container，# 开头为注释）
+_parse_docker_extra_volumes_file() {
+    local f="$1" line
+    [[ -f "$f" ]] || return 0
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line="$(_trim_volume_spec "$line")"
+        [[ -z "$line" ]] && continue
+        _add_docker_volume_spec "$line"
+    done <"$f"
+}
+
+# 收集额外挂载到 DOCKER_VOLUME_ARGS（调用方 docker run 时展开 "${DOCKER_VOLUME_ARGS[@]}"）
+# 来源（按顺序合并）：
+#   1. DOCKER_EXTRA_VOLUMES（config.local.env 一行，分号分隔）
+#   2. config.extra-volumes（可选，每行一条，见 config.extra-volumes.example）
+docker_collect_extra_volumes() {
+    DOCKER_VOLUME_ARGS=()
+    _parse_docker_extra_volumes_var "${DOCKER_EXTRA_VOLUMES:-}"
+    _parse_docker_extra_volumes_file "${REPO_ROOT}/config.extra-volumes"
+}

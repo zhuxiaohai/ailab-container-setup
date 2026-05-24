@@ -52,7 +52,9 @@ cp config.local.env.example config.local.env
 |------|------|
 | `CLASH_SUBLINK` | xcjs Clash 订阅链接（一行） |
 | `CLASH_DOWNLOAD_BASE` | xcjs 下载节点基址 |
-| `DOCKER_NETWORK`、`VOL_*_HOST` | 宿主机 `docker run` 网络与卷 |
+| `DOCKER_NETWORK`、`VOL_*_HOST` | 宿主机 `docker run` 网络与 3 个默认卷 |
+| `DOCKER_EXTRA_VOLUMES` | 额外挂载，一行、分号分隔 `host:container`（如 SSD `/fast`） |
+| `config.extra-volumes` | 可选列表文件，每行一条 `host:container`（见 `config.extra-volumes.example`） |
 | `SSH_PORT` | 默认 `22`；写死则固定端口，不随 IP 推算 |
 | `SSH_PORT_BASE` | 仅当 `SSH_PORT` 留空时：端口 = 基数 + IP 末段 |
 | `CONTAINER_IP` | `launch` 会把命令行里的 `<ip>` 传入容器；留空则容器内自动检测 |
@@ -128,7 +130,27 @@ SKIP_SETUP=1 ./setup_container.sh launch <image> <name> <ip>
 
 **B. 自己 `docker run`**
 
-保证挂载 workspace（以便访问 `/workspace/ailab-container-setup` 与 `config.local.env`），网络与 IP 按你环境配置即可。
+保证挂载 workspace（以便访问 `/workspace/ailab-container-setup` 与 `config.local.env`），网络与 IP 按你环境配置即可。若需与 `launch` 相同的额外 SSD 等挂载，自行追加与 `config.extra-volumes` / `DOCKER_EXTRA_VOLUMES` 一致的 `-v` 参数。
+
+### 额外挂载卷（任意多条）
+
+默认仍有 3 个 NFS 卷（`VOL_*`）。本地 SSD 等可再加任意多条，二选一或组合：
+
+**方式 A — `config.local.env` 一行（分号分隔）**
+
+```bash
+DOCKER_EXTRA_VOLUMES="/mnt/local_ssd_550/zhuxiaohai:/fast;/other/host/path:/other/ctr"
+```
+
+**方式 B — 列表文件（推荐多条时）**
+
+```bash
+cp config.extra-volumes.example config.extra-volumes
+# 编辑，每行 host:container，例如：
+# /mnt/local_ssd_550/zhuxiaohai:/fast
+```
+
+`launch-container.sh` 会在 3 个默认卷之后追加这些 `-v`。建议只挂个人子目录（如 `.../zhuxiaohai` → `/fast`），不要挂整盘 `local_ssd_550`（避免把宿主机 `dockers2` 暴露进容器）。
 
 ### 步骤 1：进入容器
 
@@ -271,6 +293,7 @@ ailab-container-setup/
 ├── config.defaults.env       # 默认值（提交 Git）
 ├── config.local.env.example  # 复制为 config.local.env 后修改
 ├── config.local.env          # 本环境配置（gitignore，不提交）
+├── config.extra-volumes.example  # 复制为 config.extra-volumes（额外挂载，可选）
 ├── bashrc/                 # .proxy.bashrc / .container.bashrc
 ├── clash/                  # 容器适配版 xcjs 脚本
 ├── container/              # ssh-config-auto.py, run-ssh-config.sh
